@@ -1,103 +1,175 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import React, { useState } from 'react';
+import SetupPage from '../components/setup/SetupPage';
+import InterviewPage from '../components/interview/InterviewPage';
+import ResultsPage from '../components/results/ResultsPage';
+import { Evaluation } from '../types';
+import { sampleResume, sampleJobPosting, sampleResults } from '@/utils/mockData';
+import { exportToPDF } from '@/utils/pdfExport'; 
+
+export default function HomePage() {
+  const [resumeText, setResumeText] = useState<string | null>('');
+  const [jobPosting, setJobPosting] = useState('');
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [questions, setQuestions] = useState<string[]>([]);
+  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [userAnswer, setUserAnswer] = useState('');
+  const [evaluationResults, setEvaluationResults] = useState<Evaluation[]>([]);
+  const [currentStep, setCurrentStep] = useState<'setup' | 'interview' | 'results'>('setup');
+  const [isExporting, setIsExporting] = useState(false);
+
+  const onGenerateQuestions = async () => {
+    setIsLoading(true);
+
+    try {
+      const response = await fetch('/api/generate-questions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resumeText, jobPosting }),
+      });
+  
+      const data = await response.json();
+  
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Erreur lors de la génération');
+      }
+  
+      setQuestions(data.questions);
+      setCurrentQuestion(0);
+      setCurrentStep('interview');
+    } catch (err: any) {
+      setError(err.message || 'Erreur inconnue');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const onSubmitAnswer = async () => {
+    try {
+      setIsLoading(true);
+      const question = questions[currentQuestion];
+      const res = await fetch('/api/evaluate-answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question, answer: userAnswer }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        const newEval: Evaluation = {
+          question,
+          answer: userAnswer,
+          evaluation: data.evaluation,
+        };
+        setEvaluationResults((prev) => [...prev, newEval]);
+        setUserAnswer('');
+        
+        // Automatically move to next question or finish interview
+        if (currentQuestion < questions.length - 1) {
+          // Move to next question
+          setCurrentQuestion((prev) => prev + 1);
+        } else {
+          // This was the last question, finish the interview
+          setCurrentStep('results');
+        }
+      } else {
+        setError('Erreur évaluation');
+      }
+    } catch {
+      setError('Erreur serveur');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const onNextQuestion = () => {
+    setCurrentQuestion((prev) => prev + 1);
+  };
+
+  const onFinishInterview = () => {
+    setCurrentStep('results');
+  };
+
+  const onReset = () => {
+    setResumeText('');
+    setJobPosting('');
+    setQuestions([]);
+    setUserAnswer('');
+    setCurrentQuestion(0);
+    setEvaluationResults([]);
+    setCurrentStep('setup');
+  };
+
+  const onSaveResults = () => {
+    alert('Résultats sauvegardés !');
+  };
+
+  const onExportPDF = async () => {
+    if (evaluationResults.length === 0) {
+      alert('Aucun résultat à exporter');
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const result = await exportToPDF(evaluationResults);
+      if (result.success) {
+        alert(`PDF exporté avec succès: ${result.fileName}`);
+      } else {
+        alert('Erreur lors de l\'export PDF');
+      }
+    } catch (error) {
+      console.error('Erreur export PDF:', error);
+      alert('Erreur lors de l\'export PDF');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
+    <main className="app">
+      {currentStep === 'setup' && (
+        <SetupPage
+          resumeText={resumeText}
+          setResumeText={setResumeText}
+          jobPosting={jobPosting}
+          setJobPosting={setJobPosting}
+          error={error}
+          isLoading={isLoading}
+          onGenerateQuestions={onGenerateQuestions}
+          onTestConnection={() => alert('✅ Connection ok')}
+          onFillSample={() => {
+            setResumeText(sampleResume);
+            setJobPosting(sampleJobPosting);
+          }}
+          onShowDemo={() => alert('🎥 Demo bientôt')}
         />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+      )}
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+      {currentStep === 'interview' && (
+        <InterviewPage
+          questions={questions}
+          currentQuestion={currentQuestion}
+          userAnswer={userAnswer}
+          setUserAnswer={setUserAnswer}
+          onSubmitAnswer={onSubmitAnswer}
+          isLoading={isLoading}
+          error={error}
+          onNextQuestion={onNextQuestion}
+          onFinishInterview={onFinishInterview}
+        />
+      )}
+
+      {currentStep === 'results' && (
+        <ResultsPage
+          evaluationResults={evaluationResults}
+          onReset={onReset}
+          onSaveResults={onSaveResults}
+          onExportPDF={onExportPDF}
+          isExporting={isExporting}
+        />
+      )}
+    </main>
   );
 }
