@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import SetupPage from '../components/setup/SetupPage';
 import InterviewPage from '../components/interview/InterviewPage';
 import ResultsPage from '../components/results/ResultsPage';
-import { Evaluation } from '../types';
+import { MediaProvider } from '../components/interview/SharedMediaManager';
+import { Evaluation, VideoAnalysisData, EvaluationData } from '../types';
 import { sampleResume, sampleJobPosting, sampleResults } from '@/utils/mockData';
 import { exportToPDF } from '@/utils/pdfExport'; 
 
@@ -19,6 +20,20 @@ export default function HomePage() {
   const [evaluationResults, setEvaluationResults] = useState<Evaluation[]>([]);
   const [currentStep, setCurrentStep] = useState<'setup' | 'interview' | 'results'>('setup');
   const [isExporting, setIsExporting] = useState(false);
+  const [videoAnalysisData, setVideoAnalysisData] = useState<VideoAnalysisData[]>([]);
+  const [currentQuestionVideoData, setCurrentQuestionVideoData] = useState<VideoAnalysisData[]>([]);
+
+  const clearError = () => {
+    setError('');
+  };
+
+  const handleVideoAnalysisUpdate = useCallback((analysis: VideoAnalysisData) => {
+    console.log('📊 Received video analysis:', analysis);
+    // Add to current question's data
+    setCurrentQuestionVideoData(prev => [...prev, analysis]);
+    // Also add to overall data for debugging/tracking
+    setVideoAnalysisData(prev => [...prev, analysis]);
+  }, []);
 
   const onGenerateQuestions = async () => {
     setIsLoading(true);
@@ -38,7 +53,10 @@ export default function HomePage() {
   
       setQuestions(data.questions);
       setCurrentQuestion(0);
+      setCurrentQuestionVideoData([]); // Reset video data for new interview
+      setVideoAnalysisData([]);
       setCurrentStep('interview');
+      console.log('🚀 Starting interview with', data.questions.length, 'questions');
     } catch (err: any) {
       setError(err.message || 'Erreur inconnue');
     } finally {
@@ -49,59 +67,90 @@ export default function HomePage() {
   const onSubmitAnswer = async () => {
     try {
       setIsLoading(true);
+      setError(''); // Clear any previous errors
+      
       const question = questions[currentQuestion];
+      console.log('📝 Submitting answer for question', currentQuestion + 1);
+      console.log('📊 Video analysis data for this question:', currentQuestionVideoData.length, 'data points');
+      
       const res = await fetch('/api/evaluate-answer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question, answer: userAnswer }),
+        body: JSON.stringify({ 
+          question, 
+          answer: userAnswer,
+          videoAnalysis: currentQuestionVideoData // Include video analysis for this specific question
+        }),
       });
+      
       const data = await res.json();
+      
       if (data.success) {
+        // Create evaluation with proper typing
+        const evaluation: EvaluationData = data.evaluation;
+        
         const newEval: Evaluation = {
           question,
           answer: userAnswer,
-          evaluation: data.evaluation,
+          evaluation: evaluation, // This now matches EvaluationData structure
+          videoAnalysis: currentQuestionVideoData, // Store video analysis for this question
         };
+        
         setEvaluationResults((prev) => [...prev, newEval]);
         setUserAnswer('');
+        setCurrentQuestionVideoData([]); // Clear video analysis for next question
+        
+        console.log('✅ Answer evaluated successfully for question', currentQuestion + 1);
         
         // Automatically move to next question or finish interview
         if (currentQuestion < questions.length - 1) {
-          // Move to next question
+          console.log('➡️ Moving to next question:', currentQuestion + 2);
           setCurrentQuestion((prev) => prev + 1);
         } else {
-          // This was the last question, finish the interview
+          console.log('🏁 Interview completed');
           setCurrentStep('results');
         }
       } else {
-        setError('Erreur évaluation');
+        setError(data.error || 'Erreur lors de l\'évaluation');
       }
-    } catch {
-      setError('Erreur serveur');
+    } catch (err: any) {
+      console.error('❌ Error submitting answer:', err);
+      setError('Erreur serveur lors de l\'évaluation');
     } finally {
       setIsLoading(false);
     }
   };
 
   const onNextQuestion = () => {
-    setCurrentQuestion((prev) => prev + 1);
+    if (currentQuestion < questions.length - 1) {
+      console.log('⏭️ Manual next question:', currentQuestion + 2);
+      setCurrentQuestion((prev) => prev + 1);
+      setCurrentQuestionVideoData([]); // Clear video data for new question
+    }
   };
 
   const onFinishInterview = () => {
+    console.log('🎯 Finishing interview manually');
     setCurrentStep('results');
   };
 
   const onReset = () => {
+    console.log('🔄 Resetting interview');
     setResumeText('');
     setJobPosting('');
     setQuestions([]);
     setUserAnswer('');
     setCurrentQuestion(0);
     setEvaluationResults([]);
+    setVideoAnalysisData([]);
+    setCurrentQuestionVideoData([]);
     setCurrentStep('setup');
+    setError('');
   };
 
   const onSaveResults = () => {
+    // TODO: Implement actual save functionality
+    console.log('💾 Saving results:', evaluationResults.length, 'evaluations');
     alert('Résultats sauvegardés !');
   };
 
@@ -113,6 +162,7 @@ export default function HomePage() {
 
     setIsExporting(true);
     try {
+      console.log('📄 Exporting PDF with', evaluationResults.length, 'evaluations');
       const result = await exportToPDF(evaluationResults);
       if (result.success) {
         alert(`PDF exporté avec succès: ${result.fileName}`);
@@ -127,6 +177,44 @@ export default function HomePage() {
     }
   };
 
+  const onTestConnection = async () => {
+    try {
+      console.log('🔗 Testing API connection...');
+      const response = await fetch('/api/health');
+      const data = await response.json();
+      
+      if (response.ok && data.success) {
+        alert('✅ Connexion API réussie !');
+      } else {
+        alert('⚠️ Problème de connexion API');
+      }
+    } catch (error) {
+      console.error('Connection test failed:', error);
+      alert('❌ Erreur de connexion API');
+    }
+  };
+
+  const onFillSample = () => {
+    console.log('📋 Filling sample data');
+    setResumeText(sampleResume);
+    setJobPosting(sampleJobPosting);
+  };
+
+  const onShowDemo = () => {
+    console.log('🎥 Demo requested');
+    alert('🎥 Demo vidéo bientôt disponible');
+  };
+
+  // Debug information
+  console.log('🏠 HomePage State:', {
+    currentStep,
+    currentQuestion: currentQuestion + 1,
+    totalQuestions: questions.length,
+    currentQuestionVideoData: currentQuestionVideoData.length,
+    totalVideoData: videoAnalysisData.length,
+    evaluationResults: evaluationResults.length
+  });
+
   return (
     <main className="app">
       {currentStep === 'setup' && (
@@ -138,27 +226,28 @@ export default function HomePage() {
           error={error}
           isLoading={isLoading}
           onGenerateQuestions={onGenerateQuestions}
-          onTestConnection={() => alert('✅ Connection ok')}
-          onFillSample={() => {
-            setResumeText(sampleResume);
-            setJobPosting(sampleJobPosting);
-          }}
-          onShowDemo={() => alert('🎥 Demo bientôt')}
+          onTestConnection={onTestConnection}
+          onFillSample={onFillSample}
+          onShowDemo={onShowDemo}
         />
       )}
 
       {currentStep === 'interview' && (
-        <InterviewPage
-          questions={questions}
-          currentQuestion={currentQuestion}
-          userAnswer={userAnswer}
-          setUserAnswer={setUserAnswer}
-          onSubmitAnswer={onSubmitAnswer}
-          isLoading={isLoading}
-          error={error}
-          onNextQuestion={onNextQuestion}
-          onFinishInterview={onFinishInterview}
-        />
+        <MediaProvider>
+          <InterviewPage
+            questions={questions}
+            currentQuestion={currentQuestion}
+            userAnswer={userAnswer}
+            setUserAnswer={setUserAnswer}
+            onSubmitAnswer={onSubmitAnswer}
+            isLoading={isLoading}
+            error={error}
+            onNextQuestion={onNextQuestion}
+            onFinishInterview={onFinishInterview}
+            clearError={clearError}
+            onVideoAnalysisUpdate={handleVideoAnalysisUpdate}
+          />
+        </MediaProvider>
       )}
 
       {currentStep === 'results' && (

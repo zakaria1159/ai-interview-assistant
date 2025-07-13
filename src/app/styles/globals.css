@@ -882,3 +882,126 @@ body {
     padding: 1rem;
   }
 }
+
+/* AI Interviewer Container */
+.ai-interviewer {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 2rem;
+  padding: 2rem;
+  background: var(--yellow-light);
+  border: 2px solid var(--yellow);
+  border-radius: 0;
+}
+
+/* Question Text with Avatar */
+.question-text {
+  text-align: center;
+  margin: 1rem 0;
+}
+
+.question-text p {
+  font-size: 1.125rem;
+  line-height: 1.7;
+  color: var(--black);
+  max-width: 600px;
+  margin: 0 auto;
+  font-weight: 500;
+}
+
+/* Enhanced Question Content Layout */
+.question-content {
+  padding: 2rem;
+  background: var(--white);
+  border-left: 4px solid var(--yellow);
+  text-align: center;
+}
+
+/* Avatar Interview Mode Specific Styles */
+.avatar-interview-mode {
+  background: linear-gradient(135deg, var(--yellow-light), var(--white));
+  border: 3px solid var(--yellow);
+  border-radius: 12px;
+  padding: 2rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 4px 12px rgba(251, 191, 36, 0.1);
+}
+
+.avatar-interview-mode .question-header {
+  background: var(--yellow);
+  margin: -2rem -2rem 2rem -2rem;
+  padding: 1.5rem 2rem;
+  border-bottom: 2px solid var(--black);
+}
+
+.avatar-interview-mode .question-header h3 {
+  color: var(--black);
+  font-size: 1.5rem;
+  text-align: center;
+}
+
+/* Responsive Avatar Layout */
+@media (max-width: 768px) {
+  .ai-interviewer {
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+  
+  .question-text p {
+    font-size: 1rem;
+    padding: 0 1rem;
+  }
+  
+  .question-content {
+    padding: 1rem;
+  }
+}
+
+/* Interview Flow Visual Enhancements */
+.interview-conversation {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.conversation-bubble {
+  padding: 1.5rem;
+  border: 2px solid var(--black);
+  position: relative;
+}
+
+.conversation-bubble.ai-message {
+  background: var(--yellow-light);
+  border-color: var(--yellow);
+  margin-right: 2rem;
+}
+
+.conversation-bubble.user-message {
+  background: var(--gray-50);
+  border-color: var(--gray-300);
+  margin-left: 2rem;
+}
+
+.conversation-bubble::before {
+  content: '';
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-style: solid;
+}
+
+.conversation-bubble.ai-message::before {
+  left: -12px;
+  top: 20px;
+  border-width: 10px 12px 10px 0;
+  border-color: transparent var(--yellow) transparent transparent;
+}
+
+.conversation-bubble.user-message::before {
+  right: -12px;
+  top: 20px;
+  border-width: 10px 0 10px 12px;
+  border-color: transparent transparent transparent var(--gray-300);
+}
