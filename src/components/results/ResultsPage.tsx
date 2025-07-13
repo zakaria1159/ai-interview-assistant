@@ -1,7 +1,9 @@
 // src/components/results/ResultsPage.tsx
+// Clean version with debug component removed
+
 import React from 'react';
-import VideoAnalysisResults from './VideoAnalysisResults';
 import { Evaluation } from '../../types';
+import VideoAnalysisResults from './VideoAnalysisResults';
 
 interface ResultsPageProps {
   evaluationResults: Evaluation[];
@@ -40,13 +42,13 @@ const ResultsPage: React.FC<ResultsPageProps> = ({
   return (
     <div className="app">
       <div className="container">
-        {/* Header using existing styles */}
+        {/* Header */}
         <div className="results-header">
           <h1 className="results-title">📊 Résultats de l'Entretien</h1>
           <p className="results-subtitle">Voici le détail de votre performance</p>
         </div>
 
-        {/* Overall Score using existing styles */}
+        {/* Overall Score */}
         <div className="overall-score">
           <div className="score-display">
             <span className="score-value">{overallScore}</span>
@@ -88,7 +90,7 @@ const ResultsPage: React.FC<ResultsPageProps> = ({
                   </div>
                 </div>
 
-                {/* Detailed Scores using existing grid */}
+                {/* Detailed Scores */}
                 {Object.keys(result.evaluation.scores || {}).length > 0 && (
                   <div className="result-item">
                     <div className="item-label">Scores détaillés</div>
@@ -103,7 +105,7 @@ const ResultsPage: React.FC<ResultsPageProps> = ({
                   </div>
                 )}
 
-                {/* Feedback using existing styles */}
+                {/* Feedback */}
                 <div className="feedback">
                   <div className="feedback-item">
                     <div className="feedback-label">Feedback</div>
@@ -142,7 +144,9 @@ const ResultsPage: React.FC<ResultsPageProps> = ({
           <div className="section" style={{ marginBottom: '2rem' }}>
             <div className="section-header">
               <h2 className="section-title">🎥 Analyse Comportementale Globale</h2>
-              <p className="section-description">Synthèse de votre présentation durant tout l'entretien</p>
+              <p className="section-description">
+                Synthèse de votre présentation durant tout l'entretien ({allVideoData.length} mesures)
+              </p>
             </div>
             <div className="input-container">
               <VideoAnalysisResults 
@@ -153,7 +157,7 @@ const ResultsPage: React.FC<ResultsPageProps> = ({
           </div>
         )}
 
-        {/* Action Buttons using existing styles */}
+        {/* Action Buttons */}
         <div className="export-actions">
           <button 
             onClick={onSaveResults}

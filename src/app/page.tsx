@@ -64,50 +64,50 @@ export default function HomePage() {
     }
   };
 
-  const onSubmitAnswer = async () => {
+  const onSubmitAnswer = async (resultData?: any) => {
     try {
       setIsLoading(true);
-      setError(''); // Clear any previous errors
+      setError('');
       
       const question = questions[currentQuestion];
+      // Use video data from InterviewPage if provided, otherwise use homepage data
+      const videoData = resultData?.videoAnalysis || currentQuestionVideoData;
+      
       console.log('📝 Submitting answer for question', currentQuestion + 1);
-      console.log('📊 Video analysis data for this question:', currentQuestionVideoData.length, 'data points');
+      console.log('📊 Video analysis data:', videoData.length, 'data points');
       
       const res = await fetch('/api/evaluate-answer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           question, 
-          answer: userAnswer,
-          videoAnalysis: currentQuestionVideoData // Include video analysis for this specific question
+          answer: resultData?.answer || userAnswer,
+          videoAnalysis: videoData // Use the combined video data
         }),
       });
       
       const data = await res.json();
       
       if (data.success) {
-        // Create evaluation with proper typing
         const evaluation: EvaluationData = data.evaluation;
         
         const newEval: Evaluation = {
           question,
-          answer: userAnswer,
-          evaluation: evaluation, // This now matches EvaluationData structure
-          videoAnalysis: currentQuestionVideoData, // Store video analysis for this question
+          answer: resultData?.answer || userAnswer,
+          evaluation: evaluation,
+          videoAnalysis: videoData, // Store the actual video data
         };
         
         setEvaluationResults((prev) => [...prev, newEval]);
         setUserAnswer('');
-        setCurrentQuestionVideoData([]); // Clear video analysis for next question
+        setCurrentQuestionVideoData([]); // Clear homepage video data
         
-        console.log('✅ Answer evaluated successfully for question', currentQuestion + 1);
+        console.log('✅ Saved result with', videoData.length, 'video analysis items');
         
-        // Automatically move to next question or finish interview
+        // Continue with next question logic...
         if (currentQuestion < questions.length - 1) {
-          console.log('➡️ Moving to next question:', currentQuestion + 2);
           setCurrentQuestion((prev) => prev + 1);
         } else {
-          console.log('🏁 Interview completed');
           setCurrentStep('results');
         }
       } else {
@@ -245,7 +245,7 @@ export default function HomePage() {
             onNextQuestion={onNextQuestion}
             onFinishInterview={onFinishInterview}
             clearError={clearError}
-            onVideoAnalysisUpdate={handleVideoAnalysisUpdate}
+           
           />
         </MediaProvider>
       )}

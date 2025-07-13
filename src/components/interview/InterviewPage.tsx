@@ -1,24 +1,25 @@
 // src/components/interview/InterviewPage.tsx
-import React, { useState, useEffect, useMemo } from 'react';
+// Clean version with all debugging removed
+
+import React, { useState, useEffect, useCallback } from 'react';
 import Button from '../common/Button';
 import VoiceRecorder from './VoiceRecorder';
 import TextToSpeech from './TextToSpeech';
 import AIAvatar from './AIAvatar';
 import VideoAnalysisShared from './VideoAnalysisShared';
-import { MediaProvider } from './SharedMediaManager'; // Import the provider
+import { MediaProvider } from './SharedMediaManager';
 
 interface InterviewPageProps {
   questions: string[];
   currentQuestion: number;
   userAnswer: string;
   setUserAnswer: (answer: string) => void;
-  onSubmitAnswer: () => void;
+  onSubmitAnswer: (result: any) => void;
   isLoading: boolean;
   error: string;
   onNextQuestion: () => void;
   onFinishInterview: () => void;
   clearError?: () => void;
-  onVideoAnalysisUpdate?: (analysis: any) => void;
 }
 
 const InterviewPage: React.FC<InterviewPageProps> = ({
@@ -32,74 +33,77 @@ const InterviewPage: React.FC<InterviewPageProps> = ({
   onNextQuestion,
   onFinishInterview,
   clearError,
-  onVideoAnalysisUpdate,
 }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [inputMode, setInputMode] = useState<'text' | 'voice'>('voice');
   const [aiIsSpeaking, setAiIsSpeaking] = useState(false);
   const [questionHasBeenRead, setQuestionHasBeenRead] = useState(false);
+  const [videoAnalysisData, setVideoAnalysisData] = useState<any[]>([]);
+  
   const progress = ((currentQuestion + 1) / questions.length) * 100;
   const isLastQuestion = currentQuestion === questions.length - 1;
-
-  // Video analysis should be active during answer phase
   const videoAnalysisActive = questionHasBeenRead && !aiIsSpeaking;
 
-  const handleVoiceTranscription = (transcription: string) => {
+  // Video analysis update handler
+  const handleVideoAnalysisUpdate = useCallback((analysis: any) => {
+    setVideoAnalysisData(prev => [...prev, analysis]);
+  }, []);
+
+  // Voice transcription handler
+  const handleVoiceTranscription = useCallback((transcription: string) => {
     setUserAnswer(transcription);
     if (error && clearError) {
       clearError();
     }
-  };
+  }, [setUserAnswer, error, clearError]);
 
-  const handleSubmit = () => {
+  // Submit handler with video data
+  const handleSubmit = useCallback(() => {
     if (userAnswer.trim()) {
+      const resultWithVideo = {
+        question: questions[currentQuestion],
+        answer: userAnswer,
+        videoAnalysis: videoAnalysisData,
+        questionNumber: currentQuestion + 1,
+        timestamp: Date.now()
+      };
+
       if (clearError) {
         clearError();
       }
-      onSubmitAnswer();
+
+      onSubmitAnswer(resultWithVideo);
+      setVideoAnalysisData([]);
     }
-  };
+  }, [userAnswer, questions, currentQuestion, videoAnalysisData, onSubmitAnswer, clearError]);
 
-  const handleQuestionStart = () => {
+  // Text-to-speech handlers
+  const handleQuestionStart = useCallback(() => {
     setAiIsSpeaking(true);
-  };
+  }, []);
 
-  const handleQuestionEnd = () => {
+  const handleQuestionEnd = useCallback(() => {
     setAiIsSpeaking(false);
     setQuestionHasBeenRead(true);
-  };
+  }, []);
 
-  const handleQuestionError = (error: string) => {
+  const handleQuestionError = useCallback((error: string) => {
     console.error('TTS Error:', error);
     setAiIsSpeaking(false);
     setQuestionHasBeenRead(true);
-  };
+  }, []);
 
+  // Button states
   const canSubmit = userAnswer.trim().length > 0 && !isLoading && !isRecording && !aiIsSpeaking;
   const canRecord = questionHasBeenRead && !aiIsSpeaking && !isLoading;
 
-  // Reset only necessary states when question changes
+  // Reset states when question changes
   useEffect(() => {
     setQuestionHasBeenRead(false);
     setAiIsSpeaking(false);
     setIsRecording(false);
+    setVideoAnalysisData([]);
   }, [currentQuestion]);
-
-  // Only cleanup when interview completely ends
-  useEffect(() => {
-    return () => {
-      // Cleanup when component unmounts (interview ends)
-    };
-  }, []);
-
-  // Create VideoAnalysis component - stable but receives updated props
-  const videoAnalysisComponent = (
-    <VideoAnalysisShared
-      isActive={videoAnalysisActive}
-      onAnalysisUpdate={onVideoAnalysisUpdate}
-      showPreview={true}
-    />
-  );
 
   return (
     <MediaProvider>
@@ -118,7 +122,7 @@ const InterviewPage: React.FC<InterviewPageProps> = ({
           </div>
         </div>
 
-        {/* Video Analysis Section - Cleaner presentation */}
+        {/* Video Analysis Section */}
         <div className="video-analysis-section">
           <div className="analysis-header">
             <h4>📹 Évaluation Comportementale</h4>
@@ -129,7 +133,11 @@ const InterviewPage: React.FC<InterviewPageProps> = ({
               }
             </p>
           </div>
-          {videoAnalysisComponent}
+          <VideoAnalysisShared
+            isActive={videoAnalysisActive}
+            onAnalysisUpdate={handleVideoAnalysisUpdate}
+            showPreview={true}
+          />
         </div>
 
         {/* AI Interviewer Section with Avatar */}

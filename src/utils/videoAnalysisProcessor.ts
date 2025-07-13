@@ -1,570 +1,592 @@
-// src/utils/videoAnalysisProcessor.ts
+// src/utils/enhancedVideoAnalysisProcessor.ts
 
-interface VideoAnalysisData {
+export interface MediaPipeVideoAnalysisData {
+  posture: {
+    score: number;
+    faceCentered: boolean;
+    faceVisible: boolean;
+    appropriateDistance: boolean;
+    faceSize: number;
+    horizontalAlignment: number;
+    verticalAlignment: number;
+  };
+  movement: {
+    score: number;
+    fidgetingLevel: number;
+    stability: number;
+    headMovement: number;
+  };
+  audioQuality: {
+    score: number;
+    volumeLevel: number;
+    clarity: number;
+    consistency: number;
+  };
+  overall: {
+    score: number;
+    timestamp: number;
+  };
+  faceDetection: {
+    detectionCount: number;
+    confidence: number;
+    landmarks: any[];
+  };
+}
+
+export interface EnhancedVideoAnalysisResults {
+  // Core scores (0-10)
+  postureScore: number;
+  stabilityScore: number;
+  voiceQualityScore: number;
+  presenceScore: number;
+  professionalismScore: number;
+  faceDetectionScore: number;
+  overallBehavioralScore: number;
+
+  // Enhanced breakdown with MediaPipe insights
+  breakdown: {
     posture: {
       score: number;
-      faceCentered: boolean;
-      faceVisible: boolean;
-      appropriateDistance: boolean;
+      feedback: string;
+      metrics: {
+        faceCentered: boolean;
+        faceVisible: boolean;
+        appropriateDistance: boolean;
+        avgFaceSize: number;
+        avgAlignment: number;
+      };
     };
-    movement: {
+    stability: {
       score: number;
-      fidgetingLevel: number;
-      stability: number;
+      feedback: string;
+      metrics: {
+        avgHeadMovement: number;
+        consistencyScore: number;
+        fidgetingLevel: number;
+      };
     };
-    audioQuality: {
+    voiceQuality: {
       score: number;
-      volumeLevel: number;
-      clarity: number;
-      consistency: number;
+      feedback: string;
+      metrics: {
+        avgVolume: number;
+        avgClarity: number;
+        consistency: number;
+      };
     };
-    overall: {
+    presence: {
       score: number;
-      timestamp: number;
+      feedback: string;
+      metrics: {
+        engagementLevel: number;
+        attentiveness: number;
+        confidence: number;
+      };
     };
+    faceDetection: {
+      score: number;
+      feedback: string;
+      metrics: {
+        detectionRate: number;
+        avgConfidence: number;
+        facialStability: number;
+      };
+    };
+  };
+
+  // Analytics and insights
+  analytics: {
+    totalMeasures: number;
+    analysisTimeMinutes: number;
+    consistencyScore: number;
+    improvementTrend: 'improving' | 'stable' | 'declining';
+    strengths: string[];
+    improvementAreas: string[];
+    mediaLiteracyTips: string[];
+  };
+
+  // MediaPipe specific insights
+  faceAnalysis: {
+    avgDetectionConfidence: number;
+    faceStabilityScore: number;
+    positionConsistency: number;
+    eyeContactEstimate: number;
+    professionalAppearance: number;
+  };
+}
+
+export function processEnhancedVideoAnalysisData(
+  analysisData: MediaPipeVideoAnalysisData[]
+): EnhancedVideoAnalysisResults {
+  if (!analysisData || analysisData.length === 0) {
+    return getDefaultResults();
   }
+
+  // Filter out invalid data points
+  const validData = analysisData.filter(d => 
+    d && 
+    typeof d.overall?.score === 'number' && 
+    d.overall.score >= 0 && 
+    d.overall.score <= 10
+  );
+
+  if (validData.length === 0) {
+    return getDefaultResults();
+  }
+
+  // Calculate core metrics
+  const coreMetrics = calculateCoreMetrics(validData);
+  const faceDetectionMetrics = calculateFaceDetectionMetrics(validData);
+  const stabilityMetrics = calculateStabilityMetrics(validData);
+  const voiceMetrics = calculateVoiceMetrics(validData);
   
-  interface ProcessedVideoAnalysis {
-    // Core scores matching the question evaluation format
-    postureScore: number;
-    stabilityScore: number;
-    voiceQualityScore: number;
-    presenceScore: number;
-    professionalismScore: number;
-    
-    // Overall behavioral score
-    overallBehavioralScore: number;
-    
-    // Detailed breakdown
+  // Generate enhanced insights
+  const analytics = generateAnalytics(validData, coreMetrics);
+  const faceAnalysis = generateFaceAnalysis(validData);
+  
+  return {
+    // Core scores
+    postureScore: coreMetrics.posture,
+    stabilityScore: coreMetrics.stability,
+    voiceQualityScore: coreMetrics.voiceQuality,
+    presenceScore: coreMetrics.presence,
+    professionalismScore: coreMetrics.professionalism,
+    faceDetectionScore: faceDetectionMetrics.score,
+    overallBehavioralScore: coreMetrics.overall,
+
+    // Enhanced breakdown
     breakdown: {
       posture: {
-        score: number;
-        feedback: string;
-        details: string;
-      };
-      stability: {
-        score: number;
-        feedback: string;
-        details: string;
-      };
-      voiceQuality: {
-        score: number;
-        feedback: string;
-        details: string;
-      };
-      presence: {
-        score: number;
-        feedback: string;
-        details: string;
-      };
-      professionalism: {
-        score: number;
-        feedback: string;
-        details: string;
-      };
-    };
-    
-    // Analytics data
-    analytics: {
-      totalMeasures: number;
-      analysisTimeMinutes: number;
-      consistencyScore: number;
-      improvementAreas: string[];
-      strengths: string[];
-    };
-  }
-  
-  export function processVideoAnalysisData(videoData: VideoAnalysisData[]): ProcessedVideoAnalysis {
-    if (!videoData || videoData.length === 0) {
-      return createEmptyAnalysis();
-    }
-  
-    const totalMeasures = videoData.length;
-    
-    // Calculate base averages
-    const avgPosture = calculateAverage(videoData.map(d => d.posture.score));
-    const avgMovement = calculateAverage(videoData.map(d => d.movement.score));
-    const avgAudio = calculateAverage(videoData.map(d => d.audioQuality.score));
-    
-    // Calculate advanced metrics
-    const presenceScore = calculatePresenceScore(videoData);
-    const professionalismScore = calculateProfessionalismScore(videoData);
-    const consistencyScore = calculateConsistencyScore(videoData);
-    
-    // Calculate overall behavioral score (weighted)
-    const overallBehavioralScore = Math.round(
-      (avgPosture * 0.25 + 
-       avgMovement * 0.25 + 
-       avgAudio * 0.2 + 
-       presenceScore * 0.15 + 
-       professionalismScore * 0.15) 
-    );
-  
-    // Generate detailed feedback
-    const breakdown = generateDetailedBreakdown({
-      posture: avgPosture,
-      stability: avgMovement,
-      voiceQuality: avgAudio,
-      presence: presenceScore,
-      professionalism: professionalismScore
-    }, videoData);
-  
-    // Calculate analytics
-    const analytics = generateAnalytics(videoData, consistencyScore);
-  
-    return {
-      postureScore: Math.round(avgPosture),
-      stabilityScore: Math.round(avgMovement),
-      voiceQualityScore: Math.round(avgAudio),
-      presenceScore,
-      professionalismScore,
-      overallBehavioralScore,
-      breakdown,
-      analytics
-    };
-  }
-  
-  function calculateAverage(scores: number[]): number {
-    if (scores.length === 0) return 0;
-    return scores.reduce((sum, score) => sum + score, 0) / scores.length;
-  }
-  
-  function calculatePresenceScore(videoData: VideoAnalysisData[]): number {
-    const faceVisibleCount = videoData.filter(d => d.posture.faceVisible).length;
-    const faceCenteredCount = videoData.filter(d => d.posture.faceCentered).length;
-    const appropriateDistanceCount = videoData.filter(d => d.posture.appropriateDistance).length;
-    
-    const presenceRatio = (faceVisibleCount + faceCenteredCount + appropriateDistanceCount) / (videoData.length * 3);
-    return Math.round(presenceRatio * 10);
-  }
-  
-  function calculateProfessionalismScore(videoData: VideoAnalysisData[]): number {
-    const avgPosture = calculateAverage(videoData.map(d => d.posture.score));
-    const avgStability = calculateAverage(videoData.map(d => d.movement.stability));
-    const avgAudioConsistency = calculateAverage(videoData.map(d => d.audioQuality.consistency));
-    
-    return Math.round((avgPosture + avgStability + avgAudioConsistency) / 3);
-  }
-  
-  function calculateConsistencyScore(videoData: VideoAnalysisData[]): number {
-    const overallScores = videoData.map(d => d.overall.score);
-    const mean = calculateAverage(overallScores);
-    const variance = overallScores.reduce((sum, score) => sum + Math.pow(score - mean, 2), 0) / overallScores.length;
-    const standardDeviation = Math.sqrt(variance);
-    
-    // Convert to 0-10 scale (lower std dev = higher consistency)
-    const consistencyScore = Math.max(0, 10 - (standardDeviation * 2));
-    return Math.round(consistencyScore);
-  }
-  
-  function generateDetailedBreakdown(scores: {
-    posture: number;
-    stability: number;
-    voiceQuality: number;
-    presence: number;
-    professionalism: number;
-  }, videoData: VideoAnalysisData[]) {
-    return {
-      posture: {
-        score: Math.round(scores.posture),
-        feedback: getPostureFeedback(scores.posture, videoData),
-        details: getPostureDetails(videoData)
-      },
-      stability: {
-        score: Math.round(scores.stability),
-        feedback: getStabilityFeedback(scores.stability, videoData),
-        details: getStabilityDetails(videoData)
-      },
-      voiceQuality: {
-        score: Math.round(scores.voiceQuality),
-        feedback: getVoiceFeedback(scores.voiceQuality, videoData),
-        details: getVoiceDetails(videoData)
-      },
-      presence: {
-        score: Math.round(scores.presence),
-        feedback: getPresenceFeedback(scores.presence, videoData),
-        details: getPresenceDetails(videoData)
-      },
-      professionalism: {
-        score: Math.round(scores.professionalism),
-        feedback: getProfessionalismFeedback(scores.professionalism),
-        details: getProfessionalismDetails(videoData)
-      }
-    };
-  }
-  
-  function generateAnalytics(videoData: VideoAnalysisData[], consistencyScore: number) {
-    const firstTimestamp = videoData[0]?.overall.timestamp || 0;
-    const lastTimestamp = videoData[videoData.length - 1]?.overall.timestamp || 0;
-    const analysisTimeMinutes = Math.round((lastTimestamp - firstTimestamp) / 1000 / 60);
-    
-    const improvementAreas: string[] = [];
-    const strengths: string[] = [];
-    
-    const avgScores = {
-      posture: calculateAverage(videoData.map(d => d.posture.score)),
-      movement: calculateAverage(videoData.map(d => d.movement.score)),
-      audio: calculateAverage(videoData.map(d => d.audioQuality.score))
-    };
-    
-    // Identify improvement areas and strengths
-    Object.entries(avgScores).forEach(([area, score]) => {
-      if (score >= 8) {
-        strengths.push(getStrengthMessage(area));
-      } else if (score < 6) {
-        improvementAreas.push(getImprovementMessage(area));
-      }
-    });
-    
-    return {
-      totalMeasures: videoData.length,
-      analysisTimeMinutes,
-      consistencyScore,
-      improvementAreas,
-      strengths
-    };
-  }
-  
-  // Feedback generation functions
-  function getPostureFeedback(score: number, videoData: VideoAnalysisData[]): string {
-    if (score >= 8) return "Excellente posture professionnelle maintenue tout au long de l'entretien";
-    if (score >= 6) return "Bonne posture générale avec quelques ajustements possibles";
-    if (score >= 4) return "Posture acceptable mais nécessite des améliorations";
-    return "Posture à retravailler pour une meilleure présentation professionnelle";
-  }
-  
-  function getStabilityFeedback(score: number, videoData: VideoAnalysisData[]): string {
-    const avgFidgeting = calculateAverage(videoData.map(d => d.movement.fidgetingLevel));
-    
-    if (score >= 8) return "Excellente maîtrise des mouvements et stabilité remarquable";
-    if (score >= 6) return "Bonne stabilité avec quelques mouvements mineurs";
-    if (score >= 4) return "Stabilité moyenne, réduire les mouvements parasites";
-    return `Nombreux mouvements parasites détectés (niveau ${Math.round(avgFidgeting)}/10)`;
-  }
-  
-  function getVoiceFeedback(score: number, videoData: VideoAnalysisData[]): string {
-    const avgVolume = calculateAverage(videoData.map(d => d.audioQuality.volumeLevel));
-    const avgClarity = calculateAverage(videoData.map(d => d.audioQuality.clarity));
-    
-    if (score >= 8) return "Excellente qualité vocale avec volume et clarté optimaux";
-    if (score >= 6) return "Bonne qualité audio générale";
-    if (score >= 4) return `Qualité audio acceptable (volume: ${Math.round(avgVolume)}/10, clarté: ${Math.round(avgClarity)}/10)`;
-    return "Qualité audio insuffisante - améliorer le volume et la clarté";
-  }
-  
-  function getPresenceFeedback(score: number, videoData: VideoAnalysisData[]): string {
-    const visibilityRate = (videoData.filter(d => d.posture.faceVisible).length / videoData.length) * 100;
-    
-    if (score >= 8) return `Excellente présence à l'écran (${Math.round(visibilityRate)}% de visibilité)`;
-    if (score >= 6) return "Bonne présence générale avec quelques ajustements";
-    if (score >= 4) return "Présence acceptable mais peut être améliorée";
-    return "Présence insuffisante - vérifier le cadrage et l'éclairage";
-  }
-  
-  function getProfessionalismFeedback(score: number): string {
-    if (score >= 8) return "Présentation très professionnelle et confiance remarquable";
-    if (score >= 6) return "Bon niveau de professionnalisme";
-    if (score >= 4) return "Professionnalisme acceptable avec des améliorations possibles";
-    return "Niveau de professionnalisme à améliorer";
-  }
-  
-  // Detail generation functions
-  function getPostureDetails(videoData: VideoAnalysisData[]): string {
-    const faceVisibleRate = Math.round((videoData.filter(d => d.posture.faceVisible).length / videoData.length) * 100);
-    const faceCenteredRate = Math.round((videoData.filter(d => d.posture.faceCentered).length / videoData.length) * 100);
-    const distanceRate = Math.round((videoData.filter(d => d.posture.appropriateDistance).length / videoData.length) * 100);
-    
-    return `Visage visible: ${faceVisibleRate}% • Centré: ${faceCenteredRate}% • Distance appropriée: ${distanceRate}%`;
-  }
-  
-  function getStabilityDetails(videoData: VideoAnalysisData[]): string {
-    const avgFidgeting = Math.round(calculateAverage(videoData.map(d => d.movement.fidgetingLevel)));
-    const avgStability = Math.round(calculateAverage(videoData.map(d => d.movement.stability)));
-    
-    return `Niveau d'agitation moyen: ${avgFidgeting}/10 • Stabilité générale: ${avgStability}/10`;
-  }
-  
-  function getVoiceDetails(videoData: VideoAnalysisData[]): string {
-    const avgVolume = Math.round(calculateAverage(videoData.map(d => d.audioQuality.volumeLevel)));
-    const avgClarity = Math.round(calculateAverage(videoData.map(d => d.audioQuality.clarity)));
-    const avgConsistency = Math.round(calculateAverage(videoData.map(d => d.audioQuality.consistency)));
-    
-    return `Volume moyen: ${avgVolume}/10 • Clarté: ${avgClarity}/10 • Consistance: ${avgConsistency}/10`;
-  }
-  
-  function getPresenceDetails(videoData: VideoAnalysisData[]): string {
-    const visibilityRate = Math.round((videoData.filter(d => d.posture.faceVisible).length / videoData.length) * 100);
-    const centeringRate = Math.round((videoData.filter(d => d.posture.faceCentered).length / videoData.length) * 100);
-    
-    return `Visibilité: ${visibilityRate}% • Centrage: ${centeringRate}% • ${videoData.length} mesures`;
-  }
-  
-  function getProfessionalismDetails(videoData: VideoAnalysisData[]): string {
-    const avgPosture = Math.round(calculateAverage(videoData.map(d => d.posture.score)));
-    const avgStability = Math.round(calculateAverage(videoData.map(d => d.movement.stability)));
-    
-    return `Posture moyenne: ${avgPosture}/10 • Stabilité: ${avgStability}/10 • Performance constante`;
-  }
-  
-  function getStrengthMessage(area: string): string {
-    const messages = {
-      posture: "Excellente posture et présentation professionnelle",
-      movement: "Très bonne maîtrise des mouvements et stabilité",
-      audio: "Qualité vocale remarquable et claire"
-    };
-    return messages[area as keyof typeof messages] || "Performance excellente";
-  }
-  
-  function getImprovementMessage(area: string): string {
-    const messages = {
-      posture: "Améliorer le positionnement face à la caméra",
-      movement: "Réduire les mouvements parasites et fidgeting",
-      audio: "Travailler le volume et la clarté de la voix"
-    };
-    return messages[area as keyof typeof messages] || "Amélioration nécessaire";
-  }
-  
-  function createEmptyAnalysis(): ProcessedVideoAnalysis {
-    return {
-      postureScore: 0,
-      stabilityScore: 0,
-      voiceQualityScore: 0,
-      presenceScore: 0,
-      professionalismScore: 0,
-      overallBehavioralScore: 0,
-      breakdown: {
-        posture: {
-          score: 0,
-          feedback: "Aucune donnée disponible",
-          details: "Analyse vidéo non effectuée"
-        },
-        stability: {
-          score: 0,
-          feedback: "Aucune donnée disponible",
-          details: "Analyse de mouvement non effectuée"
-        },
-        voiceQuality: {
-          score: 0,
-          feedback: "Aucune donnée disponible",
-          details: "Analyse audio non effectuée"
-        },
-        presence: {
-          score: 0,
-          feedback: "Aucune donnée disponible",
-          details: "Analyse de présence non effectuée"
-        },
-        professionalism: {
-          score: 0,
-          feedback: "Aucune donnée disponible",
-          details: "Évaluation professionnelle non effectuée"
+        score: coreMetrics.posture,
+        feedback: generatePostureFeedback(validData, coreMetrics.posture),
+        metrics: {
+          faceCentered: calculateFaceCenteredRate(validData),
+          faceVisible: calculateFaceVisibilityRate(validData),
+          appropriateDistance: calculateDistanceAppropriatenessRate(validData),
+          avgFaceSize: calculateAverageFaceSize(validData),
+          avgAlignment: calculateAverageAlignment(validData),
         }
       },
-      analytics: {
-        totalMeasures: 0,
-        analysisTimeMinutes: 0,
-        consistencyScore: 0,
-        improvementAreas: ["Activer l'analyse vidéo pour obtenir des recommandations"],
-        strengths: []
+      stability: {
+        score: coreMetrics.stability,
+        feedback: generateStabilityFeedback(validData, stabilityMetrics),
+        metrics: {
+          avgHeadMovement: stabilityMetrics.avgHeadMovement,
+          consistencyScore: stabilityMetrics.consistency,
+          fidgetingLevel: stabilityMetrics.avgFidgeting,
+        }
+      },
+      voiceQuality: {
+        score: coreMetrics.voiceQuality,
+        feedback: generateVoiceFeedback(validData, voiceMetrics),
+        metrics: {
+          avgVolume: voiceMetrics.avgVolume,
+          avgClarity: voiceMetrics.avgClarity,
+          consistency: voiceMetrics.consistency,
+        }
+      },
+      presence: {
+        score: coreMetrics.presence,
+        feedback: generatePresenceFeedback(validData, coreMetrics.presence),
+        metrics: {
+          engagementLevel: calculateEngagementLevel(validData),
+          attentiveness: calculateAttentiveness(validData),
+          confidence: calculateConfidenceLevel(validData),
+        }
+      },
+      faceDetection: {
+        score: faceDetectionMetrics.score,
+        feedback: generateFaceDetectionFeedback(validData, faceDetectionMetrics),
+        metrics: {
+          detectionRate: faceDetectionMetrics.detectionRate,
+          avgConfidence: faceDetectionMetrics.avgConfidence,
+          facialStability: faceDetectionMetrics.stability,
+        }
       }
-    };
+    },
+
+    analytics,
+    faceAnalysis
+  };
+}
+
+function calculateCoreMetrics(data: MediaPipeVideoAnalysisData[]) {
+  const posture = Math.round(data.reduce((sum, d) => sum + (d.posture?.score || 0), 0) / data.length);
+  const stability = Math.round(data.reduce((sum, d) => sum + (d.movement?.score || 0), 0) / data.length);
+  const voiceQuality = Math.round(data.reduce((sum, d) => sum + (d.audioQuality?.score || 0), 0) / data.length);
+  
+  // Calculate presence based on combination of factors
+  const presence = Math.round(data.reduce((sum, d) => {
+    const faceVisible = d.posture?.faceVisible ? 3 : 0;
+    const faceCentered = d.posture?.faceCentered ? 2 : 0;
+    const goodDistance = d.posture?.appropriateDistance ? 2 : 0;
+    const faceConfidence = (d.faceDetection?.confidence || 0) * 3;
+    return sum + Math.min(10, faceVisible + faceCentered + goodDistance + faceConfidence);
+  }, 0) / data.length);
+
+  // Calculate professionalism based on consistency and quality
+  const professionalism = Math.round((posture + stability + presence) / 3);
+  
+  const overall = Math.round((posture + stability + voiceQuality + presence + professionalism) / 5);
+
+  return { posture, stability, voiceQuality, presence, professionalism, overall };
+}
+
+function calculateFaceDetectionMetrics(data: MediaPipeVideoAnalysisData[]) {
+  const detectionsData = data.filter(d => d.faceDetection);
+  
+  if (detectionsData.length === 0) {
+    return { score: 0, detectionRate: 0, avgConfidence: 0, stability: 0 };
   }
+
+  const detectionRate = (detectionsData.filter(d => d.faceDetection.detectionCount > 0).length / detectionsData.length) * 100;
+  const avgConfidence = detectionsData.reduce((sum, d) => sum + (d.faceDetection.confidence || 0), 0) / detectionsData.length;
+  const stability = calculateFacialStability(detectionsData);
   
-  // Additional utility functions for enhanced analysis
+  const score = Math.round((detectionRate / 10) + (avgConfidence * 5) + (stability / 2));
+
+  return { score: Math.min(10, score), detectionRate, avgConfidence, stability };
+}
+
+function calculateStabilityMetrics(data: MediaPipeVideoAnalysisData[]) {
+  const movementData = data.filter(d => d.movement);
   
-  /**
-   * Calculate trend analysis for video metrics over time
-   */
-  export function calculateTrendAnalysis(videoData: VideoAnalysisData[]): {
-    postureTrend: 'stable' | 'improving' | 'declining';
-    movementTrend: 'stable' | 'improving' | 'declining';
-    audioTrend: 'stable' | 'improving' | 'declining';
-    overallTrend: 'stable' | 'improving' | 'declining';
-  } {
-    if (videoData.length < 3) {
-      return {
-        postureTrend: 'stable',
-        movementTrend: 'stable',
-        audioTrend: 'stable',
-        overallTrend: 'stable'
-      };
-    }
-  
-    const firstHalf = videoData.slice(0, Math.floor(videoData.length / 2));
-    const secondHalf = videoData.slice(Math.floor(videoData.length / 2));
-  
-    const firstHalfAvg = {
-      posture: calculateAverage(firstHalf.map(d => d.posture.score)),
-      movement: calculateAverage(firstHalf.map(d => d.movement.score)),
-      audio: calculateAverage(firstHalf.map(d => d.audioQuality.score))
-    };
-  
-    const secondHalfAvg = {
-      posture: calculateAverage(secondHalf.map(d => d.posture.score)),
-      movement: calculateAverage(secondHalf.map(d => d.movement.score)),
-      audio: calculateAverage(secondHalf.map(d => d.audioQuality.score))
-    };
-  
-    const getTrend = (first: number, second: number): 'stable' | 'improving' | 'declining' => {
-      const diff = second - first;
-      if (Math.abs(diff) < 0.5) return 'stable';
-      return diff > 0 ? 'improving' : 'declining';
-    };
-  
-    return {
-      postureTrend: getTrend(firstHalfAvg.posture, secondHalfAvg.posture),
-      movementTrend: getTrend(firstHalfAvg.movement, secondHalfAvg.movement),
-      audioTrend: getTrend(firstHalfAvg.audio, secondHalfAvg.audio),
-      overallTrend: getTrend(
-        (firstHalfAvg.posture + firstHalfAvg.movement + firstHalfAvg.audio) / 3,
-        (secondHalfAvg.posture + secondHalfAvg.movement + secondHalfAvg.audio) / 3
-      )
-    };
+  if (movementData.length === 0) {
+    return { avgHeadMovement: 0, consistency: 0, avgFidgeting: 0 };
   }
+
+  const avgHeadMovement = movementData.reduce((sum, d) => sum + (d.movement.headMovement || 0), 0) / movementData.length;
+  const avgFidgeting = movementData.reduce((sum, d) => sum + (d.movement.fidgetingLevel || 0), 0) / movementData.length;
   
-  /**
-   * Generate performance insights based on video analysis data
-   */
-  export function generatePerformanceInsights(videoData: VideoAnalysisData[]): string[] {
-    const insights: string[] = [];
+  // Calculate consistency based on variance
+  const stabilityScores = movementData.map(d => d.movement.stability);
+  const avgStability = stabilityScores.reduce((sum, s) => sum + s, 0) / stabilityScores.length;
+  const variance = stabilityScores.reduce((sum, s) => sum + Math.pow(s - avgStability, 2), 0) / stabilityScores.length;
+  const consistency = Math.max(0, 10 - Math.sqrt(variance));
+
+  return { avgHeadMovement, consistency, avgFidgeting };
+}
+
+function calculateVoiceMetrics(data: MediaPipeVideoAnalysisData[]) {
+  const audioData = data.filter(d => d.audioQuality);
+  
+  if (audioData.length === 0) {
+    return { avgVolume: 0, avgClarity: 0, consistency: 0 };
+  }
+
+  const avgVolume = audioData.reduce((sum, d) => sum + (d.audioQuality.volumeLevel || 0), 0) / audioData.length;
+  const avgClarity = audioData.reduce((sum, d) => sum + (d.audioQuality.clarity || 0), 0) / audioData.length;
+  const consistency = audioData.reduce((sum, d) => sum + (d.audioQuality.consistency || 0), 0) / audioData.length;
+
+  return { avgVolume, avgClarity, consistency };
+}
+
+function generateAnalytics(data: MediaPipeVideoAnalysisData[], coreMetrics: any) {
+  const totalMeasures = data.length;
+  const timeSpan = data.length > 1 ? data[data.length - 1].overall.timestamp - data[0].overall.timestamp : 0;
+  const analysisTimeMinutes = Math.round(timeSpan / 60000);
+
+  // Calculate consistency across all metrics
+  const allScores = data.map(d => d.overall.score);
+  const avgScore = allScores.reduce((sum, s) => sum + s, 0) / allScores.length;
+  const variance = allScores.reduce((sum, s) => sum + Math.pow(s - avgScore, 2), 0) / allScores.length;
+  const consistencyScore = Math.max(0, Math.round(10 - Math.sqrt(variance)));
+
+  // Determine improvement trend
+  let improvementTrend: 'improving' | 'stable' | 'declining' = 'stable';
+  if (data.length >= 3) {
+    const firstHalf = data.slice(0, Math.floor(data.length / 2));
+    const secondHalf = data.slice(Math.floor(data.length / 2));
+    const firstAvg = firstHalf.reduce((sum, d) => sum + d.overall.score, 0) / firstHalf.length;
+    const secondAvg = secondHalf.reduce((sum, d) => sum + d.overall.score, 0) / secondHalf.length;
     
-    if (videoData.length === 0) {
-      return ["Aucune donnée vidéo disponible pour générer des insights"];
-    }
-  
-    const processed = processVideoAnalysisData(videoData);
-    const trends = calculateTrendAnalysis(videoData);
-  
-    // Posture insights
-    if (processed.postureScore >= 8) {
-      insights.push("🎯 Excellente présentation visuelle tout au long de l'entretien");
-    } else if (processed.postureScore < 5) {
-      insights.push("📐 Améliorer le positionnement face caméra pour une meilleure présence");
-    }
-  
-    // Movement insights
-    if (processed.stabilityScore >= 8) {
-      insights.push("🧘 Très bonne maîtrise du langage corporel et stabilité");
-    } else if (processed.stabilityScore < 5) {
-      const avgFidgeting = calculateAverage(videoData.map(d => d.movement.fidgetingLevel));
-      if (avgFidgeting > 6) {
-        insights.push("⚡ Réduire les mouvements parasites pour projeter plus de confiance");
-      }
-    }
-  
-    // Audio insights
-    if (processed.voiceQualityScore >= 8) {
-      insights.push("🎙️ Excellente qualité vocale et clarté d'élocution");
-    } else if (processed.voiceQualityScore < 5) {
-      const avgVolume = calculateAverage(videoData.map(d => d.audioQuality.volumeLevel));
-      if (avgVolume < 4) {
-        insights.push("🔊 Augmenter le volume de voix pour une meilleure présence");
-      }
-      const avgClarity = calculateAverage(videoData.map(d => d.audioQuality.clarity));
-      if (avgClarity < 5) {
-        insights.push("🗣️ Améliorer l'articulation et la clarté de l'élocution");
-      }
-    }
-  
-    // Trend insights
-    if (trends.postureTrend === 'improving') {
-      insights.push("📈 Amélioration progressive de la posture pendant l'entretien");
-    } else if (trends.postureTrend === 'declining') {
-      insights.push("📉 Attention à maintenir une bonne posture sur la durée");
-    }
-  
-    if (trends.overallTrend === 'improving') {
-      insights.push("🚀 Performance comportementale en amélioration continue");
-    }
-  
-    // Consistency insights
-    if (processed.analytics.consistencyScore >= 8) {
-      insights.push("🎯 Excellente régularité dans la performance comportementale");
-    } else if (processed.analytics.consistencyScore < 5) {
-      insights.push("⚖️ Travailler la consistance pour une présentation plus uniforme");
-    }
-  
-    // Duration insights
-    if (processed.analytics.analysisTimeMinutes > 0) {
-      if (processed.analytics.analysisTimeMinutes < 2) {
-        insights.push("⏱️ Analyse de courte durée - données limitées");
-      } else if (processed.analytics.analysisTimeMinutes > 10) {
-        insights.push("📊 Analyse approfondie sur une durée significative");
-      }
-    }
-  
-    return insights.length > 0 ? insights : ["Analyse en cours - insights disponibles prochainement"];
+    if (secondAvg > firstAvg + 0.5) improvementTrend = 'improving';
+    else if (secondAvg < firstAvg - 0.5) improvementTrend = 'declining';
   }
+
+  // Generate strengths and improvement areas
+  const strengths: string[] = [];
+  const improvementAreas: string[] = [];
+  const mediaLiteracyTips: string[] = [];
+
+  if (coreMetrics.posture >= 8) strengths.push("Excellente posture et positionnement");
+  else if (coreMetrics.posture <= 5) improvementAreas.push("Améliorer le positionnement face caméra");
+
+  if (coreMetrics.stability >= 8) strengths.push("Très bonne stabilité et présence");
+  else if (coreMetrics.stability <= 5) improvementAreas.push("Réduire les mouvements parasites");
+
+  if (coreMetrics.voiceQuality >= 8) strengths.push("Excellente qualité vocale");
+  else if (coreMetrics.voiceQuality <= 5) improvementAreas.push("Améliorer la projection vocale");
+
+  // Add media literacy tips
+  mediaLiteracyTips.push("Placez la caméra au niveau des yeux pour un contact visuel optimal");
+  mediaLiteracyTips.push("Utilisez un éclairage doux et uniforme face à vous");
+  mediaLiteracyTips.push("Testez votre audio avant l'entretien pour éviter les problèmes techniques");
+
+  return {
+    totalMeasures,
+    analysisTimeMinutes,
+    consistencyScore,
+    improvementTrend,
+    strengths,
+    improvementAreas,
+    mediaLiteracyTips
+  };
+}
+
+function generateFaceAnalysis(data: MediaPipeVideoAnalysisData[]) {
+  const faceData = data.filter(d => d.faceDetection && d.faceDetection.detectionCount > 0);
   
-  /**
-   * Compare performance against benchmarks
-   */
-  export function compareToBenchmarks(videoData: VideoAnalysisData[]) {
-    const processed = processVideoAnalysisData(videoData);
-    
-    // Industry benchmarks (these could be configurable)
-    const benchmarks = {
-      posture: 7.0,
-      stability: 6.5,
-      voiceQuality: 6.0,
-      presence: 7.5,
-      professionalism: 7.0
-    };
-  
+  if (faceData.length === 0) {
     return {
-      postureComparison: processed.postureScore - benchmarks.posture,
-      stabilityComparison: processed.stabilityScore - benchmarks.stability,
-      voiceQualityComparison: processed.voiceQualityScore - benchmarks.voiceQuality,
-      presenceComparison: processed.presenceScore - benchmarks.presence,
-      professionalismComparison: processed.professionalismScore - benchmarks.professionalism,
-      overallComparison: processed.overallBehavioralScore - ((benchmarks.posture + benchmarks.stability + benchmarks.voiceQuality + benchmarks.presence + benchmarks.professionalism) / 5)
+      avgDetectionConfidence: 0,
+      faceStabilityScore: 0,
+      positionConsistency: 0,
+      eyeContactEstimate: 0,
+      professionalAppearance: 0
     };
   }
+
+  const avgDetectionConfidence = faceData.reduce((sum, d) => sum + d.faceDetection.confidence, 0) / faceData.length;
+  const faceStabilityScore = calculateFacialStability(faceData);
+  const positionConsistency = calculatePositionConsistency(faceData);
+  const eyeContactEstimate = calculateEyeContactEstimate(faceData);
+  const professionalAppearance = Math.round((avgDetectionConfidence * 5) + (positionConsistency / 2) + (faceStabilityScore / 2));
+
+  return {
+    avgDetectionConfidence: Math.round(avgDetectionConfidence * 100) / 100,
+    faceStabilityScore: Math.round(faceStabilityScore),
+    positionConsistency: Math.round(positionConsistency),
+    eyeContactEstimate: Math.round(eyeContactEstimate),
+    professionalAppearance: Math.min(10, professionalAppearance)
+  };
+}
+
+// Helper functions
+function calculateFaceCenteredRate(data: MediaPipeVideoAnalysisData[]): boolean {
+  const centeredCount = data.filter(d => d.posture?.faceCentered).length;
+  return centeredCount / data.length > 0.7;
+}
+
+function calculateFaceVisibilityRate(data: MediaPipeVideoAnalysisData[]): boolean {
+  const visibleCount = data.filter(d => d.posture?.faceVisible).length;
+  return visibleCount / data.length > 0.8;
+}
+
+function calculateDistanceAppropriatenessRate(data: MediaPipeVideoAnalysisData[]): boolean {
+  const appropriateCount = data.filter(d => d.posture?.appropriateDistance).length;
+  return appropriateCount / data.length > 0.7;
+}
+
+function calculateAverageFaceSize(data: MediaPipeVideoAnalysisData[]): number {
+  const sizesData = data.filter(d => d.posture?.faceSize !== undefined);
+  if (sizesData.length === 0) return 0;
+  return Math.round((sizesData.reduce((sum, d) => sum + d.posture.faceSize, 0) / sizesData.length) * 100) / 100;
+}
+
+function calculateAverageAlignment(data: MediaPipeVideoAnalysisData[]): number {
+  const alignmentData = data.filter(d => d.posture?.horizontalAlignment !== undefined);
+  if (alignmentData.length === 0) return 0;
+  return Math.round((alignmentData.reduce((sum, d) => sum + d.posture.horizontalAlignment, 0) / alignmentData.length) * 100) / 100;
+}
+
+function calculateFacialStability(data: MediaPipeVideoAnalysisData[]): number {
+  if (data.length < 2) return 10;
   
-  /**
-   * Generate actionable recommendations based on analysis
-   */
-  export function generateActionableRecommendations(videoData: VideoAnalysisData[]): {
-    immediate: string[];
-    longTerm: string[];
-  } {
-    const processed = processVideoAnalysisData(videoData);
-    const immediate: string[] = [];
-    const longTerm: string[] = [];
-  
-    // Immediate recommendations (can be applied right away)
-    if (processed.postureScore < 6) {
-      immediate.push("Ajustez votre position pour être bien centré dans le cadre");
-      immediate.push("Vérifiez votre éclairage et la distance à la caméra");
+  const movements = [];
+  for (let i = 1; i < data.length; i++) {
+    if (data[i].movement?.headMovement !== undefined) {
+      movements.push(data[i].movement.headMovement);
     }
-  
-    if (processed.stabilityScore < 6) {
-      immediate.push("Posez vos mains de manière stable pour réduire les mouvements");
-      immediate.push("Prenez quelques respirations profondes avant de répondre");
-    }
-  
-    if (processed.voiceQualityScore < 6) {
-      immediate.push("Parlez un peu plus fort et plus distinctement");
-      immediate.push("Vérifiez votre équipement audio et l'environnement sonore");
-    }
-  
-    // Long-term recommendations (require practice)
-    if (processed.overallBehavioralScore < 7) {
-      longTerm.push("Pratiquer des entretiens vidéo pour améliorer la présence à l'écran");
-      longTerm.push("Travailler la gestuelle et l'expression corporelle");
-    }
-  
-    if (processed.analytics.consistencyScore < 6) {
-      longTerm.push("Développer des techniques de gestion du stress pour plus de régularité");
-      longTerm.push("S'exercer à maintenir une performance stable sur la durée");
-    }
-  
-    const trends = calculateTrendAnalysis(videoData);
-    if (trends.overallTrend === 'declining') {
-      longTerm.push("Travailler l'endurance pour maintenir le niveau sur des entretiens longs");
-    }
-  
-    return { immediate, longTerm };
   }
   
-  // Export the main processing function and all utility functions
-  export type { VideoAnalysisData, ProcessedVideoAnalysis };
+  if (movements.length === 0) return 10;
+  const avgMovement = movements.reduce((sum, m) => sum + m, 0) / movements.length;
+  return Math.max(0, 10 - (avgMovement * 10));
+}
+
+function calculatePositionConsistency(data: MediaPipeVideoAnalysisData[]): number {
+  const alignments = data.map(d => d.posture?.horizontalAlignment || 0.5);
+  if (alignments.length < 2) return 10;
+  
+  const avg = alignments.reduce((sum, a) => sum + a, 0) / alignments.length;
+  const variance = alignments.reduce((sum, a) => sum + Math.pow(a - avg, 2), 0) / alignments.length;
+  return Math.max(0, 10 - (Math.sqrt(variance) * 20));
+}
+
+function calculateEyeContactEstimate(data: MediaPipeVideoAnalysisData[]): number {
+  // Estimate eye contact based on face centering and detection confidence
+  const eyeContactData = data.filter(d => d.posture?.faceCentered && d.faceDetection?.confidence > 0.7);
+  return Math.round((eyeContactData.length / data.length) * 10);
+}
+
+function calculateEngagementLevel(data: MediaPipeVideoAnalysisData[]): number {
+  return Math.round(data.reduce((sum, d) => {
+    let engagement = 0;
+    if (d.posture?.faceVisible) engagement += 3;
+    if (d.posture?.faceCentered) engagement += 3;
+    if (d.faceDetection?.confidence > 0.7) engagement += 4;
+    return sum + engagement;
+  }, 0) / (data.length * 10) * 10);
+}
+
+function calculateAttentiveness(data: MediaPipeVideoAnalysisData[]): number {
+  return Math.round(data.reduce((sum, d) => {
+    const stability = d.movement?.stability || 0;
+    const faceVisible = d.posture?.faceVisible ? 5 : 0;
+    return sum + Math.min(10, (stability + faceVisible) / 2);
+  }, 0) / data.length);
+}
+
+function calculateConfidenceLevel(data: MediaPipeVideoAnalysisData[]): number {
+  return Math.round(data.reduce((sum, d) => {
+    const posture = d.posture?.score || 0;
+    const stability = d.movement?.stability || 0;
+    const confidence = d.faceDetection?.confidence || 0;
+    return sum + Math.min(10, (posture + stability + (confidence * 10)) / 3);
+  }, 0) / data.length);
+}
+
+// Feedback generation functions
+function generatePostureFeedback(data: MediaPipeVideoAnalysisData[], score: number): string {
+  const faceVisibleRate = calculateFaceVisibilityRate(data);
+  const faceCenteredRate = calculateFaceCenteredRate(data);
+  const distanceRate = calculateDistanceAppropriatenessRate(data);
+
+  if (score >= 8) {
+    return "Excellente posture ! Votre positionnement face à la caméra est optimal et professionnel.";
+  } else if (score >= 6) {
+    return "Bonne posture générale. Quelques ajustements mineurs amélioreront votre présence à l'écran.";
+  } else {
+    let feedback = "Posture à améliorer : ";
+    if (!faceVisibleRate) feedback += "Assurez-vous que votre visage reste visible. ";
+    if (!faceCenteredRate) feedback += "Centrez-vous mieux dans le cadre. ";
+    if (!distanceRate) feedback += "Ajustez votre distance à la caméra.";
+    return feedback;
+  }
+}
+
+function generateStabilityFeedback(data: MediaPipeVideoAnalysisData[], metrics: any): string {
+  if (metrics.consistency >= 8) {
+    return "Excellente stabilité ! Votre présence est calme et assurée tout au long de l'entretien.";
+  } else if (metrics.avgHeadMovement > 0.3) {
+    return "Réduisez les mouvements de tête. Restez plus stable pour projeter plus de confiance.";
+  } else if (metrics.avgFidgeting > 7) {
+    return "Évitez les gestes parasites. Une posture plus statique renforce votre professionnalisme.";
+  } else {
+    return "Stabilité correcte. Continuez à travailler sur la constance de votre présence.";
+  }
+}
+
+function generateVoiceFeedback(data: MediaPipeVideoAnalysisData[], metrics: any): string {
+  if (metrics.avgVolume < 3) {
+    return "Parlez plus fort. Votre voix doit être clairement audible pour marquer votre présence.";
+  } else if (metrics.avgClarity < 5) {
+    return "Améliorez l'articulation. Parlez plus distinctement pour une meilleure compréhension.";
+  } else if (metrics.consistency < 5) {
+    return "Maintenez un niveau vocal constant. Évitez les variations trop importantes de volume.";
+  } else {
+    return "Bonne qualité vocale. Votre expression orale est claire et professionnelle.";
+  }
+}
+
+function generatePresenceFeedback(data: MediaPipeVideoAnalysisData[], score: number): string {
+  if (score >= 8) {
+    return "Excellente présence à l'écran ! Vous projetez confiance et professionnalisme.";
+  } else if (score >= 6) {
+    return "Bonne présence générale. Quelques ajustements renforceront votre impact visuel.";
+  } else {
+    return "Renforcez votre présence en maintenant un contact visuel constant et une posture assurée.";
+  }
+}
+
+function generateFaceDetectionFeedback(data: MediaPipeVideoAnalysisData[], metrics: any): string {
+  if (metrics.detectionRate >= 90) {
+    return "Détection faciale excellente ! Votre positionnement permet une analyse comportementale optimale.";
+  } else if (metrics.detectionRate >= 70) {
+    return "Bonne détection faciale. Maintenez votre position face à la caméra pour une analyse constante.";
+  } else {
+    return "Détection faciale irrégulière. Assurez-vous de rester bien visible et face à la caméra.";
+  }
+}
+
+function getDefaultResults(): EnhancedVideoAnalysisResults {
+  return {
+    postureScore: 5,
+    stabilityScore: 5,
+    voiceQualityScore: 5,
+    presenceScore: 5,
+    professionalismScore: 5,
+    faceDetectionScore: 0,
+    overallBehavioralScore: 5,
+    breakdown: {
+      posture: {
+        score: 5,
+        feedback: "Données de posture non disponibles",
+        metrics: {
+          faceCentered: false,
+          faceVisible: false,
+          appropriateDistance: true,
+          avgFaceSize: 0,
+          avgAlignment: 0.5,
+        }
+      },
+      stability: {
+        score: 5,
+        feedback: "Données de stabilité non disponibles",
+        metrics: {
+          avgHeadMovement: 0,
+          consistencyScore: 5,
+          fidgetingLevel: 0,
+        }
+      },
+      voiceQuality: {
+        score: 5,
+        feedback: "Données audio non disponibles",
+        metrics: {
+          avgVolume: 5,
+          avgClarity: 5,
+          consistency: 5,
+        }
+      },
+      presence: {
+        score: 5,
+        feedback: "Données de présence non disponibles",
+        metrics: {
+          engagementLevel: 5,
+          attentiveness: 5,
+          confidence: 5,
+        }
+      },
+      faceDetection: {
+        score: 0,
+        feedback: "Détection faciale non disponible",
+        metrics: {
+          detectionRate: 0,
+          avgConfidence: 0,
+          facialStability: 0,
+        }
+      }
+    },
+    analytics: {
+      totalMeasures: 0,
+      analysisTimeMinutes: 0,
+      consistencyScore: 5,
+      improvementTrend: 'stable',
+      strengths: [],
+      improvementAreas: ['Activer l\'analyse vidéo pour des retours personnalisés'],
+      mediaLiteracyTips: [
+        "Placez la caméra au niveau des yeux",
+        "Assurez-vous d'avoir un bon éclairage",
+        "Testez votre setup avant l'entretien"
+      ]
+    },
+    faceAnalysis: {
+      avgDetectionConfidence: 0,
+      faceStabilityScore: 0,
+      positionConsistency: 0,
+      eyeContactEstimate: 0,
+      professionalAppearance: 0
+    }
+  };
+}
