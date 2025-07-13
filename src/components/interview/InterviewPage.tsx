@@ -20,6 +20,7 @@ interface InterviewPageProps {
   onNextQuestion: () => void;
   onFinishInterview: () => void;
   clearError?: () => void;
+  onVideoAnalysisUpdate?: (analysis: any) => void; // ADD THIS LINE
 }
 
 const InterviewPage: React.FC<InterviewPageProps> = ({
@@ -33,6 +34,7 @@ const InterviewPage: React.FC<InterviewPageProps> = ({
   onNextQuestion,
   onFinishInterview,
   clearError,
+  onVideoAnalysisUpdate,
 }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [inputMode, setInputMode] = useState<'text' | 'voice'>('voice');
@@ -46,8 +48,22 @@ const InterviewPage: React.FC<InterviewPageProps> = ({
 
   // Video analysis update handler
   const handleVideoAnalysisUpdate = useCallback((analysis: any) => {
-    setVideoAnalysisData(prev => [...prev, analysis]);
-  }, []);
+    console.log('🔴 INTERVIEW PAGE: Received video analysis:', analysis);
+    console.log('🔴 INTERVIEW PAGE: onVideoAnalysisUpdate prop exists?', !!onVideoAnalysisUpdate);
+    
+    setVideoAnalysisData(prev => {
+      const updated = [...prev, analysis];
+      console.log('🔴 INTERVIEW PAGE: Local video data count:', updated.length);
+      return updated;
+    });
+    
+    if (onVideoAnalysisUpdate) {
+      console.log('🔴 INTERVIEW PAGE: Forwarding to HomePage');
+      onVideoAnalysisUpdate(analysis);
+    } else {
+      console.log('🔴 INTERVIEW PAGE: onVideoAnalysisUpdate prop is missing!');
+    }
+  }, [onVideoAnalysisUpdate]);
 
   // Voice transcription handler
   const handleVoiceTranscription = useCallback((transcription: string) => {
@@ -60,20 +76,22 @@ const InterviewPage: React.FC<InterviewPageProps> = ({
   // Submit handler with video data
   const handleSubmit = useCallback(() => {
     if (userAnswer.trim()) {
+      console.log('🔴 SUBMITTING with video data count:', videoAnalysisData.length);
+      
       const resultWithVideo = {
         question: questions[currentQuestion],
         answer: userAnswer,
-        videoAnalysis: videoAnalysisData,
+        videoAnalysis: videoAnalysisData, // ← This should have 5 items
         questionNumber: currentQuestion + 1,
         timestamp: Date.now()
       };
-
+  
       if (clearError) {
         clearError();
       }
-
+  
       onSubmitAnswer(resultWithVideo);
-      setVideoAnalysisData([]);
+      setVideoAnalysisData([]); // Clear for next question
     }
   }, [userAnswer, questions, currentQuestion, videoAnalysisData, onSubmitAnswer, clearError]);
 

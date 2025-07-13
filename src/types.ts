@@ -1,26 +1,36 @@
 export interface VideoAnalysisData {
-    posture: {
-      score: number;
-      faceCentered: boolean;
-      faceVisible: boolean;
-      appropriateDistance: boolean;
-    };
-    movement: {
-      score: number;
-      fidgetingLevel: number;
-      stability: number;
-    };
-    audioQuality: {
-      score: number;
-      volumeLevel: number;
-      clarity: number;
-      consistency: number;
-    };
-    overall: {
-      score: number;
-      timestamp: number;
-    };
-  }
+  posture: {
+    score: number;
+    faceCentered: boolean;
+    faceVisible: boolean;
+    appropriateDistance: boolean;
+    faceSize?: number;              // Optional for backward compatibility
+    horizontalAlignment?: number;   // Optional for backward compatibility  
+    verticalAlignment?: number;     // Optional for backward compatibility
+  };
+  movement: {
+    score: number;
+    fidgetingLevel: number;
+    stability: number;
+    headMovement?: number;          // Optional for backward compatibility
+  };
+  audioQuality: {
+    score: number;
+    volumeLevel: number;
+    clarity: number;
+    consistency: number;
+  };
+  overall: {
+    score: number;
+    timestamp: number;
+  };
+  faceDetection?: {                 // NEW: Optional MediaPipe data
+    detectionCount: number;
+    confidence: number;
+    landmarks: any[];
+    realMediaPipe?: boolean;        // Flag to identify real vs mock data
+  };
+}
   
   export interface ProcessedVideoAnalysis {
     postureScore: number;

@@ -20,6 +20,8 @@ export default function HomePage() {
   const [evaluationResults, setEvaluationResults] = useState<Evaluation[]>([]);
   const [currentStep, setCurrentStep] = useState<'setup' | 'interview' | 'results'>('setup');
   const [isExporting, setIsExporting] = useState(false);
+  
+  // Video analysis state - UPDATED
   const [videoAnalysisData, setVideoAnalysisData] = useState<VideoAnalysisData[]>([]);
   const [currentQuestionVideoData, setCurrentQuestionVideoData] = useState<VideoAnalysisData[]>([]);
 
@@ -27,13 +29,26 @@ export default function HomePage() {
     setError('');
   };
 
+  // UPDATED: Enhanced video analysis handler with better logging
   const handleVideoAnalysisUpdate = useCallback((analysis: VideoAnalysisData) => {
-    console.log('📊 Received video analysis:', analysis);
+    console.log('📊 HomePage received video analysis:', {
+      timestamp: new Date().toISOString(),
+      currentQuestion: currentQuestion + 1,
+      analysisData: analysis,
+      hasRealMediaPipe: analysis.faceDetection?.realMediaPipe || false,
+      confidence: analysis.faceDetection?.confidence || 0
+    });
+    
     // Add to current question's data
-    setCurrentQuestionVideoData(prev => [...prev, analysis]);
-    // Also add to overall data for debugging/tracking
+    setCurrentQuestionVideoData(prev => {
+      const updated = [...prev, analysis];
+      console.log(`📈 Current question ${currentQuestion + 1} now has ${updated.length} video analysis items`);
+      return updated;
+    });
+    
+    // Also add to overall data for tracking
     setVideoAnalysisData(prev => [...prev, analysis]);
-  }, []);
+  }, [currentQuestion]);
 
   const onGenerateQuestions = async () => {
     setIsLoading(true);
@@ -53,10 +68,14 @@ export default function HomePage() {
   
       setQuestions(data.questions);
       setCurrentQuestion(0);
-      setCurrentQuestionVideoData([]); // Reset video data for new interview
+      
+      // UPDATED: Reset video analysis data for new interview
+      setCurrentQuestionVideoData([]);
       setVideoAnalysisData([]);
+      
       setCurrentStep('interview');
       console.log('🚀 Starting interview with', data.questions.length, 'questions');
+      console.log('🎥 Video analysis system initialized and ready');
     } catch (err: any) {
       setError(err.message || 'Erreur inconnue');
     } finally {
@@ -64,17 +83,24 @@ export default function HomePage() {
     }
   };
 
+  // UPDATED: Enhanced submit answer with better video data handling
   const onSubmitAnswer = async (resultData?: any) => {
     try {
       setIsLoading(true);
       setError('');
       
       const question = questions[currentQuestion];
-      // Use video data from InterviewPage if provided, otherwise use homepage data
+      
+      // UPDATED: Use video data from InterviewPage if provided, otherwise use HomePage data
       const videoData = resultData?.videoAnalysis || currentQuestionVideoData;
       
-      console.log('📝 Submitting answer for question', currentQuestion + 1);
-      console.log('📊 Video analysis data:', videoData.length, 'data points');
+      console.log('📝 Submitting answer for question', currentQuestion + 1, {
+        question: question.substring(0, 50) + '...',
+        answerLength: (resultData?.answer || userAnswer).length,
+        videoDataPoints: videoData.length,
+        hasMediaPipeData: videoData.some((item: VideoAnalysisData) => item.faceDetection?.realMediaPipe === true),
+        videoDataSample: videoData[0] || null
+      });
       
       const res = await fetch('/api/evaluate-answer', {
         method: 'POST',
@@ -82,7 +108,7 @@ export default function HomePage() {
         body: JSON.stringify({ 
           question, 
           answer: resultData?.answer || userAnswer,
-          videoAnalysis: videoData // Use the combined video data
+          videoAnalysis: videoData // Use the video data
         }),
       });
       
@@ -98,16 +124,32 @@ export default function HomePage() {
           videoAnalysis: videoData, // Store the actual video data
         };
         
-        setEvaluationResults((prev) => [...prev, newEval]);
-        setUserAnswer('');
-        setCurrentQuestionVideoData([]); // Clear homepage video data
+        setEvaluationResults((prev) => {
+          const updated = [...prev, newEval];
+          console.log('✅ Saved evaluation result:', {
+            questionNumber: currentQuestion + 1,
+            videoAnalysisItems: videoData.length,
+            totalEvaluations: updated.length,
+            mediaLiteracyData: videoData.filter((item: VideoAnalysisData) => item.faceDetection?.realMediaPipe).length
+          });
+          return updated;
+        });
         
-        console.log('✅ Saved result with', videoData.length, 'video analysis items');
+        setUserAnswer('');
+        
+        // UPDATED: Clear current question video data and log transition
+        console.log(`🔄 Clearing video data for question ${currentQuestion + 1} (${currentQuestionVideoData.length} items saved)`);
+        setCurrentQuestionVideoData([]);
         
         // Continue with next question logic...
         if (currentQuestion < questions.length - 1) {
-          setCurrentQuestion((prev) => prev + 1);
+          setCurrentQuestion((prev) => {
+            const nextQ = prev + 1;
+            console.log(`⏭️ Moving to question ${nextQ + 1}/${questions.length}`);
+            return nextQ;
+          });
         } else {
+          console.log('🎯 Interview completed, moving to results');
           setCurrentStep('results');
         }
       } else {
@@ -121,21 +163,42 @@ export default function HomePage() {
     }
   };
 
+  // UPDATED: Enhanced next question handler
   const onNextQuestion = () => {
     if (currentQuestion < questions.length - 1) {
-      console.log('⏭️ Manual next question:', currentQuestion + 2);
+      console.log('⏭️ Manual next question:', {
+        from: currentQuestion + 1,
+        to: currentQuestion + 2,
+        currentVideoData: currentQuestionVideoData.length
+      });
+      
       setCurrentQuestion((prev) => prev + 1);
-      setCurrentQuestionVideoData([]); // Clear video data for new question
+      
+      // Clear video data for new question
+      console.log(`🔄 Clearing video data for manual transition (${currentQuestionVideoData.length} items discarded)`);
+      setCurrentQuestionVideoData([]);
     }
   };
 
+  // UPDATED: Enhanced finish interview handler
   const onFinishInterview = () => {
-    console.log('🎯 Finishing interview manually');
+    console.log('🎯 Finishing interview manually:', {
+      currentQuestion: currentQuestion + 1,
+      totalQuestions: questions.length,
+      currentVideoData: currentQuestionVideoData.length,
+      totalVideoData: videoAnalysisData.length,
+      totalEvaluations: evaluationResults.length
+    });
     setCurrentStep('results');
   };
 
+  // UPDATED: Enhanced reset handler
   const onReset = () => {
-    console.log('🔄 Resetting interview');
+    console.log('🔄 Resetting interview:', {
+      previousEvaluations: evaluationResults.length,
+      previousVideoData: videoAnalysisData.length
+    });
+    
     setResumeText('');
     setJobPosting('');
     setQuestions([]);
@@ -146,11 +209,24 @@ export default function HomePage() {
     setCurrentQuestionVideoData([]);
     setCurrentStep('setup');
     setError('');
+    
+    console.log('✅ Interview reset complete - all data cleared');
   };
 
   const onSaveResults = () => {
     // TODO: Implement actual save functionality
-    console.log('💾 Saving results:', evaluationResults.length, 'evaluations');
+    const totalVideoItems = evaluationResults.reduce((sum, evaluation) => sum + (evaluation.videoAnalysis?.length || 0), 0);
+    const mediaPipeItems = evaluationResults.reduce((sum, evaluation) => 
+      sum + (evaluation.videoAnalysis?.filter(item => item.faceDetection?.realMediaPipe).length || 0), 0
+    );
+    
+    console.log('💾 Saving results:', {
+      evaluations: evaluationResults.length,
+      totalVideoItems,
+      mediaPipeItems,
+      successRate: totalVideoItems > 0 ? Math.round((mediaPipeItems / totalVideoItems) * 100) : 0
+    });
+    
     alert('Résultats sauvegardés !');
   };
 
@@ -162,7 +238,13 @@ export default function HomePage() {
 
     setIsExporting(true);
     try {
-      console.log('📄 Exporting PDF with', evaluationResults.length, 'evaluations');
+      const totalVideoItems = evaluationResults.reduce((sum, evaluation) => sum + (evaluation.videoAnalysis?.length || 0), 0);
+      console.log('📄 Exporting PDF:', {
+        evaluations: evaluationResults.length,
+        totalVideoItems,
+        hasMediaPipeData: totalVideoItems > 0
+      });
+      
       const result = await exportToPDF(evaluationResults);
       if (result.success) {
         alert(`PDF exporté avec succès: ${result.fileName}`);
@@ -205,14 +287,22 @@ export default function HomePage() {
     alert('🎥 Demo vidéo bientôt disponible');
   };
 
-  // Debug information
-  console.log('🏠 HomePage State:', {
+  // UPDATED: Enhanced debug information
+  console.log('🏠 HomePage State Debug:', {
     currentStep,
-    currentQuestion: currentQuestion + 1,
-    totalQuestions: questions.length,
-    currentQuestionVideoData: currentQuestionVideoData.length,
-    totalVideoData: videoAnalysisData.length,
-    evaluationResults: evaluationResults.length
+    interview: {
+      currentQuestion: currentQuestion + 1,
+      totalQuestions: questions.length,
+      currentQuestionVideoData: currentQuestionVideoData.length,
+      totalVideoData: videoAnalysisData.length,
+      evaluationResults: evaluationResults.length
+    },
+    videoAnalysis: {
+      currentQuestionItems: currentQuestionVideoData.length,
+      currentQuestionHasMediaPipe: currentQuestionVideoData.some(item => item.faceDetection?.realMediaPipe),
+      totalItems: videoAnalysisData.length,
+      totalMediaPipeItems: videoAnalysisData.filter(item => item.faceDetection?.realMediaPipe).length
+    }
   });
 
   return (
@@ -245,7 +335,7 @@ export default function HomePage() {
             onNextQuestion={onNextQuestion}
             onFinishInterview={onFinishInterview}
             clearError={clearError}
-           
+            onVideoAnalysisUpdate={handleVideoAnalysisUpdate} // ADDED: This is crucial!
           />
         </MediaProvider>
       )}
